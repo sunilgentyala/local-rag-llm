@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local RAG LLM — Privacy-First Document Chat</title>
+<meta name="description" content="A privacy-first, fully local Retrieval-Augmented Generation app. Chat with your PDFs, DOCX, TXT and CSV files — no internet, no API keys, no data leaves your machine.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+<style>
+  :root{
+    --bg:#0b0e14;
+    --bg-soft:#11151f;
+    --card:#161b27;
+    --border:#232938;
+    --text:#e7eaf0;
+    --muted:#9aa3b5;
+    --accent:#6ee7b7;
+    --accent2:#7dd3fc;
+    --accent3:#c4b5fd;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:radial-gradient(1200px 600px at 80% -10%, rgba(125,211,252,.08), transparent),
+               radial-gradient(1000px 500px at 0% 0%, rgba(110,231,183,.07), transparent),
+               var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;
+  }
+  a{color:var(--accent2);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 24px;}
+
+  nav{position:sticky;top:0;z-index:10;backdrop-filter:blur(10px);background:rgba(11,14,20,.75);border-bottom:1px solid var(--border);}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem;color:var(--text);}
+  .brand span.dot{color:var(--accent);}
+  nav .links{display:flex;gap:22px;font-size:.92rem;}
+  nav .links a{color:var(--muted);}
+  nav .links a:hover{color:var(--text);}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:10px 18px;border-radius:999px;font-weight:600;font-size:.92rem;
+    border:1px solid var(--border);
+  }
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06131a;border:none;}
+  .btn-primary:hover{filter:brightness(1.08);text-decoration:none;}
+  .btn-ghost{color:var(--text);}
+  .btn-ghost:hover{background:var(--card);text-decoration:none;}
+
+  header.hero{padding:96px 0 64px;text-align:center;}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);color:var(--muted);font-size:.82rem;margin-bottom:24px;
+  }
+  .eyebrow .pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 rgba(110,231,183,.6);animation:pulse 2s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(110,231,183,.6);}70%{box-shadow:0 0 0 10px rgba(110,231,183,0);}100%{box-shadow:0 0 0 0 rgba(110,231,183,0);}}
+  h1{
+    font-size:clamp(2.4rem,5vw,4rem);font-weight:800;letter-spacing:-.02em;line-height:1.08;
+    background:linear-gradient(135deg,var(--text) 35%,var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .hero p.sub{max-width:680px;margin:22px auto 0;color:var(--muted);font-size:1.12rem;}
+  .hero-ctas{display:flex;gap:14px;justify-content:center;margin-top:36px;flex-wrap:wrap;}
+  .badges{display:flex;gap:8px;justify-content:center;margin-top:28px;flex-wrap:wrap;}
+  .badges img{height:22px;border-radius:6px;}
+
+  section{padding:64px 0;}
+  .section-head{text-align:center;max-width:640px;margin:0 auto 48px;}
+  .section-head .tag{color:var(--accent);font-weight:700;font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;}
+  .section-head h2{font-size:clamp(1.7rem,3vw,2.3rem);margin-top:10px;letter-spacing:-.01em;}
+  .section-head p{color:var(--muted);margin-top:12px;}
+
+  .grid{display:grid;gap:18px;}
+  .grid-3{grid-template-columns:repeat(3,1fr);}
+  .grid-2{grid-template-columns:repeat(2,1fr);}
+  @media(max-width:760px){.grid-3,.grid-2{grid-template-columns:1fr;}}
+
+  .card{
+    background:linear-gradient(180deg,var(--card),var(--bg-soft));
+    border:1px solid var(--border);border-radius:var(--radius);padding:26px;
+    transition:transform .2s ease, border-color .2s ease;
+  }
+  .card:hover{transform:translateY(-3px);border-color:#2c3450;}
+  .card .icon{font-size:1.6rem;}
+  .card h3{margin:14px 0 8px;font-size:1.05rem;}
+  .card p{color:var(--muted);font-size:.93rem;}
+
+  .stack-row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
+  .pill{
+    border:1px solid var(--border);background:var(--card);border-radius:999px;
+    padding:8px 16px;font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:8px;
+  }
+
+  pre{
+    background:#0a0d13;border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px;overflow-x:auto;font-size:.82rem;line-height:1.5;color:#cdd6e6;
+  }
+  code{font-family:"SF Mono",Consolas,"Cascadia Code",monospace;}
+  .steps{display:flex;flex-direction:column;gap:16px;}
+  .step{display:flex;gap:16px;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;}
+  .step .num{
+    flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));color:#06131a;font-weight:700;font-size:.85rem;
+  }
+  .step code{display:block;margin-top:6px;color:var(--accent2);}
+
+  .diagram{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:28px;overflow-x:auto;
+  }
+  .diagram pre{border:none;background:transparent;padding:0;color:var(--muted);font-size:.78rem;}
+
+  .privacy{
+    background:linear-gradient(135deg, rgba(110,231,183,.08), rgba(125,211,252,.06));
+    border:1px solid var(--border);border-radius:var(--radius);padding:36px;
+  }
+  .privacy ul{list-style:none;display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px;}
+  @media(max-width:760px){.privacy ul{grid-template-columns:1fr;}}
+  .privacy li{display:flex;gap:10px;color:var(--muted);font-size:.93rem;}
+  .privacy li::before{content:"🔒";flex:none;}
+
+  .roadmap li{list-style:none;display:flex;gap:10px;align-items:flex-start;padding:8px 0;color:var(--muted);}
+  .roadmap li.done::before{content:"✅";}
+  .roadmap li.todo::before{content:"🔜";}
+
+  footer{border-top:1px solid var(--border);padding:40px 0;text-align:center;color:var(--muted);font-size:.88rem;}
+  footer a{color:var(--accent2);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="brand">🧠 Local RAG LLM <span class="dot">.</span></div>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#quickstart">Quick Start</a>
+      <a href="#roadmap">Roadmap</a>
+    </div>
+    <a class="btn btn-primary" href="https://github.com/sunilgentyala/local-rag-llm">★ GitHub</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow"><span class="pulse"></span> 100% offline · no API keys · no telemetry</div>
+    <h1>Chat with your documents.<br>Entirely on your machine.</h1>
+    <p class="sub">A privacy-first Retrieval-Augmented Generation app powered by Ollama, LangChain and ChromaDB. Upload PDFs, DOCX, TXT or CSV files and get grounded, cited answers — with zero data ever leaving your computer.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="https://github.com/sunilgentyala/local-rag-llm#-quick-start">Get Started →</a>
+      <a class="btn btn-ghost" href="https://github.com/sunilgentyala/local-rag-llm">View Source</a>
+    </div>
+    <div class="badges">
+      <img src="https://img.shields.io/badge/Python-3.11+-blue?logo=python" alt="Python 3.11+">
+      <img src="https://img.shields.io/badge/LangChain-1.2-green" alt="LangChain 1.2">
+      <img src="https://img.shields.io/badge/Ollama-local-orange" alt="Ollama local">
+      <img src="https://img.shields.io/badge/ChromaDB-1.5-purple" alt="ChromaDB 1.5">
+      <img src="https://img.shields.io/badge/Streamlit-1.57-red?logo=streamlit" alt="Streamlit 1.57">
+      <img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT License">
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="tag">Why this exists</div>
+      <h2>Everything you need, nothing leaves your laptop</h2>
+      <p>Built to answer one question: can a RAG app be genuinely useful without a cloud bill or a privacy trade-off?</p>
+    </div>
+    <div class="grid grid-3">
+      <div class="card"><div class="icon">📄</div><h3>Multi-format ingestion</h3><p>PDF, DOCX, TXT and CSV — drop in one file or a whole folder in a single session.</p></div>
+      <div class="card"><div class="icon">💾</div><h3>Persistent vector store</h3><p>ChromaDB writes to disk, so you never re-embed the same documents twice between restarts.</p></div>
+      <div class="card"><div class="icon">🔗</div><h3>Source citations</h3><p>Every answer links back to the exact file and page it came from — no black-box answers.</p></div>
+      <div class="card"><div class="icon">🌐</div><h3>Opt-in web search</h3><p>DuckDuckGo search with no API key, blended with local document context in hybrid mode.</p></div>
+      <div class="card"><div class="icon">🧵</div><h3>Conversation memory</h3><p>The last few turns are carried into the prompt, plus a SQLite-backed history that survives restarts.</p></div>
+      <div class="card"><div class="icon">📝</div><h3>Paper generator</h3><p>Turn your retrieved context into IEEE, Elsevier or blog-style DOCX drafts, section by section.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="tag">Under the hood</div>
+      <h2>A straightforward, inspectable pipeline</h2>
+      <p>No hidden orchestration — every hop in the chain is a few lines of LangChain you can read in five minutes.</p>
+    </div>
+    <div class="diagram">
+<pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                         STREAMLIT UI                            │
+│         Upload · Chat · Generate · History  (app.py)            │
+└──────────────┬──────────────────────────┬───────────────────────┘
+               │                          │
+   ┌───────────▼───────────┐   ┌──────────▼───────────────────────┐
+   │   INGESTION PIPELINE   │   │       RAG QUERY PIPELINE         │
+   │                        │   │                                   │
+   │  PDF/DOCX/TXT/CSV      │   │  User question                    │
+   │       ↓                │   │       ↓                          │
+   │  RecursiveCharacter    │   │  OllamaEmbeddings                 │
+   │  TextSplitter          │   │  (nomic-embed-text)                │
+   │       ↓                │   │       ↓                          │
+   │  OllamaEmbeddings      │   │  ChromaDB similarity search        │
+   │       ↓                │   │  (top-k chunks, + optional web)    │
+   │  ChromaDB (persisted)  │   │       ↓                          │
+   └────────────────────────┘   │  ChatOllama (llama3)               │
+                                │       ↓                          │
+                                │  Answer + source citations         │
+                                └──────────────────────────────────┘
+</pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <div class="tag">Stack</div>
+      <h2>Built entirely on local-first tools</h2>
+    </div>
+    <div class="stack-row">
+      <span class="pill">🦙 Ollama</span>
+      <span class="pill">🔗 LangChain 1.x (LCEL)</span>
+      <span class="pill">🗂️ ChromaDB</span>
+      <span class="pill">🎈 Streamlit</span>
+      <span class="pill">🐍 Python 3.11+</span>
+      <span class="pill">🦆 DuckDuckGo Search</span>
+      <span class="pill">📦 SQLite</span>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="tag">5 minutes to running</div>
+      <h2>Quick Start</h2>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div><strong>Install Ollama</strong><code>curl -fsSL https://ollama.com/install.sh | sh</code></div></div>
+      <div class="step"><div class="num">2</div><div><strong>Pull the models</strong><code>ollama pull llama3 && ollama pull nomic-embed-text</code></div></div>
+      <div class="step"><div class="num">3</div><div><strong>Clone & install</strong><code>git clone https://github.com/sunilgentyala/local-rag-llm.git && cd local-rag-llm && pip install -r requirements.txt</code></div></div>
+      <div class="step"><div class="num">4</div><div><strong>Run it</strong><code>ollama serve  &  streamlit run app.py</code></div></div>
+    </div>
+    <p style="text-align:center;margin-top:22px;color:var(--muted);">Prefer containers? <code>docker compose up</code> spins up Ollama + the app together.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="privacy">
+      <div class="section-head" style="margin-bottom:0;">
+        <div class="tag">Privacy guarantee</div>
+        <h2>Nothing you upload ever leaves your machine</h2>
+      </div>
+      <ul>
+        <li>No data is transmitted to any external server.</li>
+        <li>No API key is required to run the core app.</li>
+        <li>All embeddings and inference run on-device via Ollama.</li>
+        <li>Vectors persist locally in <code>.chroma/</code> (gitignored).</li>
+        <li>Uploaded files are processed via tempfile and deleted after use.</li>
+        <li>Web search is strictly opt-in and clearly labelled in the UI.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="tag">What's next</div>
+      <h2>Roadmap</h2>
+    </div>
+    <ul class="roadmap" style="max-width:520px;margin:0 auto;">
+      <li class="done">Multi-PDF RAG with local LLM</li>
+      <li class="done">Persistent ChromaDB storage</li>
+      <li class="done">Source citation display</li>
+      <li class="done">Multi-format docs, web search, memory, SQLite history, paper generator</li>
+      <li class="todo">Hybrid retrieval (BM25 + vector) and local reranking</li>
+      <li class="todo">QLoRA fine-tuning notebook (Colab + Unsloth)</li>
+      <li class="todo">Quantized model benchmarks (Q4 vs Q8)</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>MIT Licensed · Built by <a href="https://github.com/sunilgentyala">Sunil Gentyala</a></p>
+    <p style="margin-top:6px;">Reach me at <a href="mailto:sunil.gentyala@ieee.org">sunil.gentyala@ieee.org</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
