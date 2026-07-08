@@ -3,7 +3,10 @@ venv/
 __pycache__/
 *.pyc
 .chroma/
+.flashrank_cache/
 uploads/
 rag_history.db
 .env
 *.docx
+ssl/
+.DS_Store

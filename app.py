@@ -20,12 +20,15 @@ from pathlib import Path
 
 import streamlit as st
 from langchain_chroma import Chroma
+from langchain_classic.retrievers import EnsembleRetriever
 from langchain_community.document_loaders import (
     CSVLoader,
     Docx2txtLoader,
     PyPDFLoader,
     TextLoader,
 )
+from langchain_community.retrievers import BM25Retriever
+from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -45,6 +48,7 @@ CHUNK_SIZE      = 1_000
 CHUNK_OVERLAP   = 150
 TOP_K_DOCS      = 4
 TOP_K_GENERATE  = 6
+TOP_K_FETCH     = 20    # candidates pulled before reranking
 MEMORY_TURNS    = 5
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
@@ -99,6 +103,7 @@ db.init_db()
 for _k, _v in {
     "messages":       [],
     "vector_store":   None,
+    "all_chunks":     [],
     "docs_processed": False,
     "doc_count":      0,
     "search_mode":    "Documents",
@@ -116,6 +121,16 @@ def _llm(temperature: float = 0.1) -> ChatOllama:
         model=LLM_MODEL, base_url=OLLAMA_BASE_URL,
         temperature=temperature, streaming=True,
     )
+
+
+@st.cache_resource
+def _reranker():
+    """Download and cache the cross-encoder reranker model once per server session."""
+    try:
+        from flashrank import Ranker
+        return Ranker(model_name="ms-marco-MiniLM-L-12-v2", cache_dir=".flashrank_cache")
+    except Exception:
+        return None
 
 
 # ── Document loading ──────────────────────────────────────────────────────────
@@ -173,10 +188,52 @@ def _load_store() -> Chroma | None:
     except Exception:
         return None
 
+def _load_store_and_chunks() -> tuple[Chroma | None, list]:
+    """Like _load_store, but also reconstructs the chunk list BM25 needs."""
+    store = _load_store()
+    if store is None:
+        return None, []
+    result = store._collection.get(include=["documents", "metadatas"])
+    chunks = [
+        Document(page_content=doc, metadata=meta or {})
+        for doc, meta in zip(result["documents"], result["metadatas"])
+    ]
+    return store, chunks
+
 def _clear_store() -> None:
     import shutil
     if Path(CHROMA_PATH).exists():
         shutil.rmtree(CHROMA_PATH)
+
+
+# ── Hybrid retrieval + reranking ─────────────────────────────────────────────
+def _hybrid_retriever(store: Chroma, chunks: list) -> EnsembleRetriever:
+    """Combine BM25 keyword search with ChromaDB vector search (50 / 50)."""
+    bm25 = BM25Retriever.from_documents(chunks)
+    bm25.k = TOP_K_FETCH
+    vec = store.as_retriever(search_kwargs={"k": TOP_K_FETCH})
+    return EnsembleRetriever(retrievers=[bm25, vec], weights=[0.5, 0.5])
+
+def _rerank(query: str, docs: list, top_k: int) -> list:
+    """Cross-encoder rerank; falls back to the first top_k candidates if unavailable."""
+    ranker = _reranker()
+    if ranker is None or not docs:
+        return docs[:top_k]
+    try:
+        from flashrank import RerankRequest
+        passages = [{"id": i, "text": d.page_content} for i, d in enumerate(docs)]
+        results  = ranker.rerank(RerankRequest(query=query, passages=passages))
+        return [docs[r["id"]] for r in results[:top_k]]
+    except Exception:
+        return docs[:top_k]
+
+def _retrieve(query: str, store: Chroma, chunks: list, top_k: int) -> list:
+    """Hybrid BM25 + vector retrieval, reranked down to top_k. Falls back to
+    plain similarity search if there are no chunks available for BM25."""
+    if not chunks:
+        return store.as_retriever(search_kwargs={"k": top_k}).invoke(query)
+    candidates = _hybrid_retriever(store, chunks).invoke(query)
+    return _rerank(query, candidates, top_k)
 
 
 # ── Web search ────────────────────────────────────────────────────────────────
@@ -221,11 +278,8 @@ def answer(user_input: str, mode: str, history: str,
         return {"answer": ans, "doc_sources": [], "web_context": ctx}
 
     # Documents or Hybrid — need a store
-    retriever  = store.as_retriever(
-        search_type="similarity", search_kwargs={"k": TOP_K_DOCS}
-    )
-    doc_docs   = retriever.invoke(user_input)
-    doc_ctx    = "\n\n".join(d.page_content for d in doc_docs)
+    doc_docs = _retrieve(user_input, store, st.session_state.all_chunks, TOP_K_DOCS)
+    doc_ctx  = "\n\n".join(d.page_content for d in doc_docs)
 
     if mode == "Hybrid":
         web_ctx  = web_search(user_input, n=3)
@@ -263,10 +317,8 @@ def fmt_sources(docs: list) -> str:
 
 # ── Section generation via RAG ────────────────────────────────────────────────
 def generate_section(section: str, paper_type: str, wc: int, store: Chroma) -> str:
-    retriever = store.as_retriever(
-        search_type="similarity", search_kwargs={"k": TOP_K_GENERATE}
-    )
-    ctx = "\n\n".join(d.page_content for d in retriever.invoke(section))
+    docs = _retrieve(section, store, st.session_state.all_chunks, TOP_K_GENERATE)
+    ctx  = "\n\n".join(d.page_content for d in docs)
     return (
         ChatPromptTemplate.from_messages([
             ("system", _SECTION_PROMPT), ("human", "Write the section now."),
@@ -336,14 +388,14 @@ with st.sidebar:
     if st.session_state.docs_processed:
         st.success(f"✅ KB ready · {st.session_state.doc_count} chunks")
     else:
-        existing = _load_store()
+        existing, existing_chunks = _load_store_and_chunks()
         if existing:
-            n = existing._collection.count()
-            st.info(f"💾 Existing KB ({n} chunks)")
+            st.info(f"💾 Existing KB ({len(existing_chunks)} chunks)")
             if not st.session_state.vector_store:
                 st.session_state.vector_store   = existing
+                st.session_state.all_chunks     = existing_chunks
                 st.session_state.docs_processed = True
-                st.session_state.doc_count      = n
+                st.session_state.doc_count      = len(existing_chunks)
         elif mode == "Documents":
             st.warning("⚠️ No documents indexed.")
         else:
@@ -362,6 +414,7 @@ if process_btn:
             store = _build_store(chunks)
 
         st.session_state.vector_store   = store
+        st.session_state.all_chunks     = chunks
         st.session_state.docs_processed = True
         st.session_state.doc_count      = len(chunks)
         st.session_state.messages       = []
@@ -378,6 +431,7 @@ if clear_btn:
     _clear_store()
     st.session_state.update({
         "vector_store":   None,
+        "all_chunks":     [],
         "docs_processed": False,
         "doc_count":      0,
         "messages":       [],

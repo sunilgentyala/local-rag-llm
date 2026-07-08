@@ -1,0 +1,169 @@
+# Part 1 — Step-by-Step Execution Guide
+# Local RAG LLM: Build & Run on Your Laptop
+# ============================================
+# Plain-English guide. No prior ML experience required.
+# Estimated total setup time: 20–40 minutes (mostly model download time).
+
+# ─────────────────────────────────────────────────────────────
+# STEP 1 — Install Ollama (your local AI engine)
+# ─────────────────────────────────────────────────────────────
+# Ollama runs AI models locally on your laptop — no GPU needed.
+
+# macOS (paste this in Terminal):
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Windows:
+# 1. Go to https://ollama.com/download
+# 2. Download and run OllamaSetup.exe
+# 3. Open a new Command Prompt after installation
+
+# Verify Ollama installed correctly:
+ollama --version
+# Expected output: ollama version 0.x.x
+
+
+# ─────────────────────────────────────────────────────────────
+# STEP 2 — Pull the two required AI models
+# ─────────────────────────────────────────────────────────────
+# llama3 is the "brain" that answers your questions.
+# nomic-embed-text converts text into numbers (vectors) for searching.
+# These downloads are ~4.7 GB and ~274 MB respectively.
+# Run each command and wait for the progress bar to reach 100%.
+
+ollama pull llama3
+ollama pull nomic-embed-text
+
+# Verify both models are available:
+ollama list
+# Expected: you should see llama3 and nomic-embed-text listed
+
+
+# ─────────────────────────────────────────────────────────────
+# STEP 3 — Get the project files
+# ─────────────────────────────────────────────────────────────
+# Option A — Clone from GitHub (if you have Git installed):
+git clone https://github.com/<your-username>/local-rag-llm.git
+cd local-rag-llm
+
+# Option B — Manual setup (if you created the files by hand):
+# Navigate to your project folder:
+cd ~/Desktop/local-rag-llm
+
+
+# ─────────────────────────────────────────────────────────────
+# STEP 4 — Create a Python virtual environment
+# ─────────────────────────────────────────────────────────────
+# A virtual environment is like a clean room for Python packages —
+# it keeps this project's dependencies isolated from everything else.
+
+# macOS / Linux:
+python3 -m venv venv
+source venv/bin/activate
+
+# Windows:
+python -m venv venv
+venv\Scripts\activate
+
+# Your terminal prompt should now show (venv) at the start.
+# This means the virtual environment is active.
+
+# Verify Python version (must be 3.11 or higher):
+python --version
+# Expected: Python 3.11.x or 3.12.x
+
+
+# ─────────────────────────────────────────────────────────────
+# STEP 5 — Install Python dependencies
+# ─────────────────────────────────────────────────────────────
+# This installs LangChain, ChromaDB, Streamlit, and everything else
+# the app needs. It reads from requirements.txt.
+
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# This may take 2–5 minutes. You'll see many packages being downloaded.
+# Wait until you see "Successfully installed..." at the end.
+
+
+# ─────────────────────────────────────────────────────────────
+# STEP 6 — Start the Ollama server
+# ─────────────────────────────────────────────────────────────
+# Ollama needs to be running in the background so the app can
+# communicate with it. Open a NEW terminal window and run:
+
+ollama serve
+
+# Leave this terminal open. You should see:
+# "Listening on 127.0.0.1:11434"
+# Do NOT close this terminal — it must stay running while you use the app.
+
+
+# ─────────────────────────────────────────────────────────────
+# STEP 7 — Launch the Streamlit app
+# ─────────────────────────────────────────────────────────────
+# Go back to your ORIGINAL terminal (with venv active) and run:
+
+streamlit run app.py
+
+# Streamlit will print something like:
+#   Local URL:  http://localhost:8501
+#   Network URL: http://192.168.x.x:8501
+#
+# Your browser should open automatically. If not, open it manually
+# and go to: http://localhost:8501
+
+
+# ─────────────────────────────────────────────────────────────
+# STEP 8 — Use the app
+# ─────────────────────────────────────────────────────────────
+# 1. In the LEFT SIDEBAR, click "Browse files" under "Upload Documents"
+# 2. Select one or more PDF files from your computer
+# 3. Click the "⚙️ Process" button
+# 4. Wait for the green "✅ Knowledge base ready" message
+# 5. Type your question in the chat box at the bottom of the screen
+# 6. Press Enter and wait ~10–30 seconds for the answer
+# 7. Click "📚 Sources" under the answer to see which pages were used
+
+
+# ─────────────────────────────────────────────────────────────
+# STOPPING THE APP
+# ─────────────────────────────────────────────────────────────
+# To stop Streamlit:         Press Ctrl+C in the Streamlit terminal
+# To stop Ollama:            Press Ctrl+C in the Ollama terminal
+# To deactivate the venv:    Type: deactivate
+
+
+# ─────────────────────────────────────────────────────────────
+# RESTARTING LATER (after first-time setup is done)
+# ─────────────────────────────────────────────────────────────
+# Terminal 1 — Start Ollama:
+ollama serve
+
+# Terminal 2 — Activate venv and start app:
+cd ~/Desktop/local-rag-llm
+source venv/bin/activate        # Windows: venv\Scripts\activate
+streamlit run app.py
+
+# Your previously uploaded documents are already indexed —
+# you can start chatting immediately without re-uploading PDFs.
+
+
+# ─────────────────────────────────────────────────────────────
+# TROUBLESHOOTING
+# ─────────────────────────────────────────────────────────────
+# Problem: "Connection refused" in the app
+# Fix:     Make sure Ollama is running (ollama serve in a separate terminal)
+
+# Problem: "model 'llama3' not found"
+# Fix:     Run: ollama pull llama3
+
+# Problem: "python3: command not found"
+# Fix:     Install Python 3.11 from https://python.org/downloads
+
+# Problem: Very slow responses (>60 seconds)
+# Fix:     Close other apps to free RAM. Responses are slower on CPU —
+#          this is normal. A 10-second wait is typical.
+
+# Problem: "No module named 'langchain'"
+# Fix:     Make sure your venv is activated (you see "(venv)" in the prompt)
+#          Then run: pip install -r requirements.txt

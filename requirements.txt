@@ -17,6 +17,12 @@ pypdf==6.10.2
 python-docx>=1.1.0
 docx2txt>=0.8
 
+# Hybrid search (BM25 keyword retrieval)
+rank_bm25
+
+# Reranking (cross-encoder, downloads ~20 MB model on first use)
+flashrank
+
 # Web search (no API key required)
 duckduckgo-search>=6.0.0
 

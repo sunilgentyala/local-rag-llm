@@ -1,0 +1,15 @@
+[theme]
+base = "dark"
+primaryColor = "#2E74B5"
+backgroundColor = "#1E1E2E"
+secondaryBackgroundColor = "#252535"
+textColor = "#E8E8F0"
+font = "sans serif"
+
+[server]
+headless = true
+port = 8501
+sslCertFile = "ssl/cert.pem"
+sslKeyFile  = "ssl/key.pem"
+enableCORS = false
+enableXsrfProtection = true
