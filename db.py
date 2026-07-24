@@ -103,10 +103,10 @@ def get_session_documents(session_id: int) -> list[dict]:
 
 def delete_session(session_id: int) -> None:
     con = sqlite3.connect(DB_PATH)
-    con.executescript(f"""
-        DELETE FROM messages  WHERE session_id={session_id};
-        DELETE FROM documents WHERE session_id={session_id};
-        DELETE FROM sessions  WHERE id={session_id};
-    """)
-    con.commit()
-    con.close()
+    try:
+        con.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+        con.execute("DELETE FROM documents WHERE session_id = ?", (session_id,))
+        con.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        con.commit()
+    finally:
+        con.close()
