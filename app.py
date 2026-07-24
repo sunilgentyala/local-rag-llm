@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_classic.retrievers import EnsembleRetriever
 from langchain_community.document_loaders import (
@@ -38,12 +39,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import db
 from generators import generate_blog_docx, generate_elsevier_docx, generate_ieee_docx
 
+
+load_dotenv()
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 CHROMA_PATH     = ".chroma"
 COLLECTION_NAME = "rag_docs"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-LLM_MODEL       = "llama3"
-EMBED_MODEL     = "nomic-embed-text"
+LLM_MODEL       = os.getenv("LLM_MODEL", "llama3")
+EMBED_MODEL     = os.getenv("EMBED_MODEL", "nomic-embed-text")
 CHUNK_SIZE      = 1_000
 CHUNK_OVERLAP   = 150
 TOP_K_DOCS      = 4
